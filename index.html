@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AWS IVS 低延遲直播</title>
+    <style>
+        /* 基本的頁面樣式 */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #1a1a1a;
+            color: #f0f0f0;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        /* 播放器容器 */
+        .player-container {
+            width: 90%;
+            max-width: 960px; /* 限制最大寬度 */
+            background-color: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        }
+        /* 讓 video 元素具有響應式特性，並維持 16:9 的比例 */
+        .video-wrapper {
+            position: relative;
+            padding-top: 56.25%; /* 16:9 Aspect Ratio (9 / 16 * 100) */
+        }
+        /* 播放器本身 */
+        #video-player {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+        }
+        /* 頁面標題 */
+        h1 {
+            text-align: center;
+            margin-bottom: 2rem;
+            font-weight: 300;
+            letter-spacing: 1px;
+        }
+        .main-content {
+            padding: 2rem;
+        }
+    </style>
+    <!-- 引入 AWS IVS Player SDK -->
+    <script src="https://player.live-video.net/1.30.0/amazon-ivs-player.min.js"></script>
+</head>
+<body>
+
+    <div class="main-content">
+        <h1>我的低延遲直播</h1>
+        <div class="player-container">
+            <div class="video-wrapper">
+                <!-- 這個 video 標籤是播放器的掛載點 -->
+                <video id="video-player" playsinline autoplay muted controls></video>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // 檢查瀏覽器是否支援 IVS Player
+            if (!IVSPlayer.isPlayerSupported) {
+                console.warn('The current browser does not support the Amazon IVS player.');
+                alert('您的瀏覽器不支援此播放器。');
+                return;
+            }
+
+            // 1. 從 AWS IVS 頻道取得的播放 URL
+            // !! 非常重要：請將下面的 URL 替換成您自己的 Playback URL !!
+            const PLAYBACK_URL = 'https://42866cceba18.us-east-1.playback.live-video.net/api/video/v1/us-east-1.763625926828.channel.Rr1FDIxD9MIh.m3u8';
+
+            // 2. 初始化 IVS Player
+            const player = IVSPlayer.create();
+            console.log('IVS Player created');
+
+            // 3. 將播放器附加到 <video> 元素上
+            const videoElement = document.getElementById('video-player');
+            player.attachHTMLVideoElement(videoElement);
+            console.log('Player attached to video element');
+
+            // 4. 載入串流
+            player.load(PLAYBACK_URL);
+            console.log('Loading stream:', PLAYBACK_URL);
+
+            // 5. 開始播放
+            // 許多瀏覽器會阻擋自動播放有聲影片，所以我們初始設為靜音 (muted)
+            // `playsinline` 屬性有助於在 iOS 上正常播放
+            player.play();
+            console.log('Attempting to play...');
+
+            // 您可以監聽播放器的事件
+            player.addEventListener(IVSPlayer.PlayerState.PLAYING, () => {
+                console.log('Player is in PLAYING state');
+            });
+
+            player.addEventListener(IVSPlayer.PlayerState.ENDED, () => {
+                console.log('Player is in ENDED state (stream ended)');
+            });
+
+            player.addEventListener(IVSPlayer.PlayerEventType.ERROR, (error) => {
+                console.error('Player Error:', error);
+            });
+        });
+    </script>
+
+</body>
+</html>
