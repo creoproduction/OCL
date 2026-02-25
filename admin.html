@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OBS Publisher Control Panel</title>
+    <script src="https://web-broadcast.live-video.net/1.6.0/amazon-ivs-web-broadcast.js"></script>
+    <style>
+        body { font-family: sans-serif; background-color: #1a1a1a; color: #f0f0f0; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        .container { max-width: 600px; width: 100%; background-color: #2a2a2a; padding: 20px; border-radius: 8px; }
+        h1 { text-align: center; color: #a970ff; }
+        video { width: 100%; background-color: black; border-radius: 4px; margin-bottom: 15px; }
+        input, select, button { width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 4px; border: 1px solid #555; background-color: #333; color: #fff; font-size: 16px; }
+        button { background-color: #a970ff; color: white; font-weight: bold; cursor: pointer; border: none; }
+        button:hover { background-color: #9350f5; }
+        #status { margin-top: 10px; text-align: center; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>OBS Publisher Control Panel</h1>
+        <video id="preview" playsinline></video>
+        <label for="token">Participant Token:</label>
+        <input type="text" id="token" placeholder="Paste your participant token here">
+        <label for="video-devices">Video Source:</label>
+        <select id="video-devices"></select>
+        <button id="join-button">Join Stage</button>
+        <div id="status">Status: Disconnected</div>
+    </div>
+
+    <script>
+        const { Stage, StageEvents, ConnectionState } = IVSBroadcast;
+
+        const joinButton = document.getElementById('join-button');
+        const tokenInput = document.getElementById('token');
+        const videoDevicesSelect = document.getElementById('video-devices');
+        const previewEl = document.getElementById('preview');
+        const statusEl = document.getElementById('status');
+        let stage;
+        let localStream;
+
+        async function populateVideoDevices() {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(d => d.kind === 'videoinput');
+                videoDevicesSelect.innerHTML = '';
+                videoDevices.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    option.text = device.label || `Camera ${videoDevicesSelect.length + 1}`;
+                    videoDevicesSelect.appendChild(option);
+                });
+                // Try to pre-select OBS Virtual Camera
+                const obsOption = Array.from(videoDevicesSelect.options).find(o => o.text.toLowerCase().includes('obs virtual camera'));
+                if (obsOption) {
+                    obsOption.selected = true;
+                }
+            } catch (err) {
+                console.error("Error populating video devices:", err);
+                statusEl.textContent = "Error: Could not get media devices.";
+            }
+        }
+
+        async function handleJoin() {
+            const token = tokenInput.value;
+            if (!token) {
+                alert("Please paste a participant token first.");
+                return;
+            }
+            if (stage && stage.connectionState !== ConnectionState.DISCONNECTED) {
+                alert("Already connected. Please leave first.");
+                return;
+            }
+
+            try {
+                const selectedDeviceId = videoDevicesSelect.value;
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        deviceId: { exact: selectedDeviceId },
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 },
+                    },
+                    audio: true // You can set this to false if OBS handles all audio
+                });
+
+                previewEl.srcObject = localStream;
+
+                stage = new Stage(token, {
+                    stageStream: async () => localStream,
+                });
+
+                stage.on(StageEvents.CONNECTION_STATE_CHANGED, (state) => {
+                    statusEl.textContent = `Status: ${state}`;
+                    if (state === ConnectionState.CONNECTED) {
+                        joinButton.textContent = "Leave Stage";
+                    } else if (state === ConnectionState.DISCONNECTED) {
+                        joinButton.textContent = "Join Stage";
+                        previewEl.srcObject = null;
+                        localStream.getTracks().forEach(track => track.stop());
+                    }
+                });
+                
+                await stage.join();
+
+            } catch (err) {
+                console.error("Error joining stage:", err);
+                statusEl.textContent = `Error: ${err.message}`;
+            }
+        }
+
+        function handleLeave() {
+            if (stage) {
+                stage.leave();
+            }
+        }
+
+        joinButton.addEventListener('click', () => {
+            if (!stage || stage.connectionState === ConnectionState.DISCONNECTED) {
+                handleJoin();
+            } else {
+                handleLeave();
+            }
+        });
+
+        // Populate devices on load
+        populateVideoDevices();
+    </script>
+</body>
+</html>
